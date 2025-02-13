@@ -1,0 +1,52 @@
+# Runs on every change on a PR, this can be used to validate
+# the rule file changes using an extracted sample.
+
+name: Pull Request Changes
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened]
+
+jobs:
+  extract:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        rust: [nightly-2023-06-28]
+
+    steps:
+      # SETUP
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@b4d02c14493a9653fe7af06cc89ca5298071c66e
+        with:
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+      - uses: hecrj/setup-rust-action@50a120e4d34903c2c1383dec0e9b1d349a9cc2b1
+        with:
+          rust-version: ${{ matrix.rust }}
+      - uses: actions/checkout@v3
+
+      # GET CHANGED FILES TO DETERMINE LANGUAGE
+      - uses: umani/changed-files@e800e40c8475490f1e1325f19064a2b832483d90
+        id: files
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # EXTRACTION
+      - name: Sample Wikipedia Extraction
+        run: ./scripts/extraction.sh
+        env:
+          FILES_CREATED: ${{ steps.files.outputs.files_created }}
+          FILES_UPDATED: ${{ steps.files.outputs.files_updated }}
+      - name: Deduplicate Wikipedia Extraction
+        run: ./scripts/dedupe.sh sample.txt
+
+      # UPLOAD
+      - uses: actions/upload-artifact@v3
+        with:
+          name: extraction
+          path: output/*
